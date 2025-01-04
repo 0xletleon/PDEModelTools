@@ -1,0 +1,30 @@
+schema_version = "1.0.0"
+
+id = "pde_model_tools"
+name = "PDE Model Tools"
+version = "0.1.0"
+tagline = "仅用于学习，严禁商用"
+maintainer = "letleon <letleon@163.com>"
+type = "add-on"
+copyright = ["2025 letleon"]
+
+website = "https://github.com/0xletleon/PDEModelTools"
+tags = ["Animation", "Mesh", "Development" , "Game Engine"]
+
+blender_version_min = "4.2.0"
+
+license = [
+  "SPDX:GPL-3.0-or-later",
+]
+
+[build]
+paths_exclude_pattern = [
+  "__pycache__/",
+  "/.git/",
+  "/*.zip",
+  "/*.bat",
+  "/*.jpg",
+  "/*.png",
+  "/.gitignore",
+  "/*.md"
+]
