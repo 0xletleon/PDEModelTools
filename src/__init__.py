@@ -1,3 +1,4 @@
+# __init__.py
 import bpy
 
 from . import ui,log

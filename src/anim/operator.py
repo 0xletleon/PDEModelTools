@@ -1,3 +1,4 @@
+# anim\operator.py
 import os
 import re
 import struct

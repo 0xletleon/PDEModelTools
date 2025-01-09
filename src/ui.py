@@ -1,10 +1,5 @@
+# ui.py
 import bpy
-
-
-class MeshPanel(bpy.types.Panel):
-    """MESH面板"""
-
-    bl_label = "MESH面板"
 
 
 class ImportPanel(bpy.types.Panel):

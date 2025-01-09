@@ -1,3 +1,4 @@
+# mesh_wcm\operator.py
 import math
 import os
 import traceback
@@ -62,16 +63,15 @@ class ImportMeshWCMClass(bpy.types.Operator):
                 vertices = mesh_item["vertices"]["data"]
                 # 读取面数据
                 faces = mesh_item["faces"]["data"]
-
+                # 获取法线数据
+                normals = mesh_item["normals"]
                 # 读取UV坐标
-                # uv_coords = this_obj["vertices"]["uv_coords"]
-                # 读取切线
-                # tangents = this_obj["vertices"]["tangents"]
+                uvs = mesh_item["uvs"]
 
                 # 创建新网格
-                new_mesh = bpy.data.meshes.new(f"{mesh_name}_{obj_name}_{idx}")
+                new_mesh = bpy.data.meshes.new(f"{obj_name}_{idx}")
                 new_obj = bpy.data.objects.new(
-                    f"{mesh_name}_{obj_name}_{idx}", new_mesh
+                    f"{obj_name}_{idx}", new_mesh
                 )
 
                 # 将对象添加到场景中
@@ -79,6 +79,29 @@ class ImportMeshWCMClass(bpy.types.Operator):
 
                 # 创建顶点 点, 线, 面
                 new_mesh.from_pydata(vertices, [], faces)
+
+                # 创建UV图层
+                uv_layer = new_mesh.uv_layers.new(name="UVMap")
+
+                # 为每个循环（loop）设置UV坐标
+                for face in new_mesh.polygons:
+                    for loop_idx in face.loop_indices:
+                        # 获取顶点索引
+                        vertex_idx = new_mesh.loops[loop_idx].vertex_index
+                        # 设置UV坐标
+                        uv_layer.data[loop_idx].uv = uvs[vertex_idx]
+
+                # 启用平滑着色
+                new_mesh.shade_smooth()
+
+                # 准备法线数据
+                loop_normals = []
+                for poly in new_mesh.polygons:
+                    for vertex_idx in poly.vertices:
+                        loop_normals.append(normals[vertex_idx])
+
+                # 设置自定义法线
+                new_mesh.normals_split_custom_set(loop_normals)
 
                 # 更新网格
                 new_mesh.update()

@@ -1,3 +1,4 @@
+# skel\operator.py
 import os
 import struct
 

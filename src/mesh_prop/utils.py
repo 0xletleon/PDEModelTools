@@ -1,6 +1,8 @@
+# mesh_prop\utils.py
 import struct
 import traceback
 
+from .. import tools
 from ..log import log
 
 
@@ -33,7 +35,7 @@ def read_head(self, data, start_index):
     # 打印头部信息
     log.debug(
         "<<< 网格物体数量: %s 本物体面数据组数量: %s 本网格变换矩阵数量: %s 本网格字节总数: %s",
-        hex(mesh_obj_number),hex(mesh_face_group_number),hex(mesh_matrices_number),hex(mesh_byte_size)
+        hex(mesh_obj_number), hex(mesh_face_group_number), hex(mesh_matrices_number), hex(mesh_byte_size)
     )
 
     # 返回文件中包含网格物体数量, 本网格变换矩阵数量, 本网格字节总数
@@ -46,12 +48,10 @@ def read_vertices(self, vertices_data, mesh_matrices_number, mesh_byte_size):
     log.debug(">>> 开始解析顶点数据")
     # 顶点数据
     vertices = []
-    # UV 坐标数据
-    uv_coords = []
     # 法线数据
-    # normals = []
-    # 切线数据
-    tangents = []
+    normals = []
+    # UV 坐标数据
+    uvs = []
 
     # 数据块的大小 (0x34)
     block_size = int(mesh_byte_size / mesh_matrices_number)
@@ -69,24 +69,28 @@ def read_vertices(self, vertices_data, mesh_matrices_number, mesh_byte_size):
             # 计算当前块的起始位置
             mniv = block_size * mni
             # 确保有足够的字节进行解包
-            if mniv + 12 <= mesh_byte_size:
+            if mniv + block_size <= mesh_byte_size:
                 vx = struct.unpack_from("f", vertices_data, mniv)[0]
                 vy = struct.unpack_from("f", vertices_data, mniv + 4)[0]
                 vz = struct.unpack_from("f", vertices_data, mniv + 8)[0]
                 # 将顶点添加到顶点列表
                 vertices.append((vx, vy, vz))
 
-                # 读取UV坐标 !实验
-                # u = struct.unpack_from("f", vertices_data, mniv + 0x1C)[0]
-                # v = struct.unpack_from("f", vertices_data, mniv + 0x28)[0]
-                # uv_coords.append((u, v))
+                # 读取法线数据
+                nx = tools.read_half_float(vertices_data, mniv + 0x0c)
+                ny = tools.read_half_float(vertices_data, mniv + 0x0e)
+                nz = tools.read_half_float(vertices_data, mniv + 0x10)
+                normals.append((nx, ny, nz))
+                # log.debug(">> 读取法线数据: %s , %s , %s", nx, ny, nz)
 
-                # 读取切线 !实验
-                # tx = struct.unpack_from("f", vertices_data, mniv + 0x24)[0]
-                # ty = struct.unpack_from("f", vertices_data, mniv + 0x28)[0]
-                # tz = struct.unpack_from("f", vertices_data, mniv + 0x2C)[0]
-                # tw = struct.unpack_from("f", vertices_data, mniv + 0x30)[0]
-                # tangents.append((tx, ty, tz, tw))
+                # 读取UV坐标
+                # 金币的UV有问题！！！或者说方法有问题！！！
+                uv_start = mniv + block_size - 0xc
+                # log.debug(">> uv_start: %s , mniv : %s ", uv_start, mniv)
+                u = tools.read_half_float(vertices_data, uv_start)
+                v = tools.read_half_float(vertices_data, uv_start + 0x2)
+                uvs.append((u, 1 - v))
+                log.debug(">> 读取UV坐标: %s , %s ", u, 1 - v)
             else:
                 log.debug("! 顶点数据解析失败: 不足的字节数在偏移量 %s", mniv)
                 break
@@ -98,7 +102,7 @@ def read_vertices(self, vertices_data, mesh_matrices_number, mesh_byte_size):
 
     log.debug("<<< 顶点数据解析完成: %s 组", len(vertices))
 
-    return vertices, uv_coords, tangents
+    return vertices, normals, uvs
 
 
 # 定义解析面数据函数
@@ -161,7 +165,7 @@ def split_mesh(self, data):
                 return {"CANCELLED"}
 
             # 解析顶点数据块
-            vertices_array, uv_coords, tangents = read_vertices(
+            vertices_array, normals, uvs = read_vertices(
                 self, vertices_data, mesh_matrices_number, mesh_byte_size
             )
 
@@ -202,10 +206,10 @@ def split_mesh(self, data):
                         "mesh_matrices_number": mesh_matrices_number,
                         "mesh_byte_size": mesh_byte_size,
                         "data": vertices_array,
-                        "uv_coords": uv_coords,  # xx
-                        "tangents": tangents,
                     },
                     "faces": {"size": faces_data_size, "data": faces_array},
+                    "uvs": uvs,
+                    "normals": normals,
                 }
             )
 

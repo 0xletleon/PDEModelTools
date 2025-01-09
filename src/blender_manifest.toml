@@ -2,7 +2,7 @@ schema_version = "1.0.0"
 
 id = "pde_model_tools"
 name = "PDE Model Tools"
-version = "0.1.0"
+version = "0.1.1"
 tagline = "仅用于学习，严禁商用"
 maintainer = "letleon <letleon@163.com>"
 type = "add-on"
