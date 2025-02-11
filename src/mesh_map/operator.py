@@ -5,6 +5,7 @@ import os
 import bpy
 
 from . import utils
+from ..log import log
 
 
 # 定义操作类
@@ -45,7 +46,7 @@ class ImportMeshMapClass(bpy.types.Operator):
             mesh_obj = utils.split_mesh(self, data)
 
             # 循环索引
-            idx = 0
+            idx = 1
             # 读取数据块
             for this_obj in mesh_obj:
                 # 读取顶点数据
@@ -56,6 +57,8 @@ class ImportMeshMapClass(bpy.types.Operator):
                 normals = this_obj["normals"]
                 # 读取UV坐标
                 uvs = this_obj["uvs"]
+                # 贴图名称 ColorMap
+                colormap = this_obj["colormap"]
 
                 # 创建新网格
                 new_mesh = bpy.data.meshes.new(f"{mesh_name}_{idx}")
@@ -99,6 +102,38 @@ class ImportMeshMapClass(bpy.types.Operator):
                 new_obj.rotation_mode = "XYZ"
                 # 设置X轴的旋转值为90度（转换为弧度）
                 new_obj.rotation_euler = (math.radians(90), 0, 0)
+
+                # 检查是否有有效的贴图名称
+                if colormap["name"]:
+                    # 创建材质并设置贴图名称
+                    material = bpy.data.materials.new(name=colormap["name"])
+                    material.use_nodes = True
+                    nodes = material.node_tree.nodes
+
+                    # 清除默认的节点
+                    for node in nodes:
+                        nodes.remove(node)
+
+                    # 创建一个 Principled BSDF 节点
+                    bsdf = nodes.new(type="ShaderNodeBsdfPrincipled")
+                    bsdf.location = (0, 0)
+
+                    # 创建一个 Material Output 节点
+                    output_node = nodes.new(type="ShaderNodeOutputMaterial")
+                    output_node.location = (300, 0)
+
+                    # 连接节点
+                    material.node_tree.links.new(
+                        output_node.inputs["Surface"], bsdf.outputs["BSDF"]
+                    )
+
+                    # 将材质分配给对象
+                    if new_obj.data.materials:
+                        new_obj.data.materials[0] = material
+                    else:
+                        new_obj.data.materials.append(material)
+                else:
+                    log.debug("没有找到有效的贴图名称，跳过材质创建")
 
                 # 循环索引+1
                 idx += 1

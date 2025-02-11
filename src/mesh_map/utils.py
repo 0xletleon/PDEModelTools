@@ -6,48 +6,69 @@ from .. import tools
 from ..log import log
 
 
-def find_next_head(data, data_start):
+def find_next_head(data, data_start, block_size):
     """查找下一个物体头部"""
-    # 记录传入的 data_start
-    temp_data_start = data_start
-    log.debug(">>>>>>>>>>>>>>>>>>>>>>>> : %s", hex(data_start))
     data_len = len(data)
-    log.debug("DATA大小: %s", hex(data_len))
+    log.debug(
+        ">> 进入find_next_head: st:%s bs:%s DATA大小: %s <<",
+        hex(data_start),
+        hex(block_size),
+        hex(data_len),
+    )
 
-    while True:
-        if data_start >= data_len:
-            log.debug(
-                "<<<<<<<<<<<<<<<<<<<<<<<!!! 没有找到下一个物体头部,开始查找地址: %s",
-                hex(temp_data_start),
-            )
-            return None
+    # 检查是否超出数据范围
+    if data_start >= data_len:
+        log.debug(
+            "<<<<<<<<<<<<<<<<<<<<<!!! 没有找到下一个物体头部,开始查找地址: %s",
+            hex(data_start),
+        )
+        return None
 
-        # 读取下一个值
-        # log.debug("data_start: %s",hex(data_start))
-        tag_ff = data[data_start: data_start + 1][0]
-        # log.debug("tag_ff: %s", hex(tag_ff))
-        # data_start += 1
-        if tag_ff == 0xFF:
-            if data_start + 4 < len(data):  # 确保有足够的数据来解包一个整数
-                tag_4ff = struct.unpack_from("<I", data, data_start)[0]
-                # log.debug("tag_4ff: %s",hex(tag_4ff))
-                if tag_4ff != 0xFFFFFFFF:
-                    data_start += 1
-                    # log.debug("!= 0xffffffff : %s",hex(data_start))
-                else:
-                    # log.debug("tag_4ff: %s",hex(tag_4ff))
-                    data_start -= 0x30 + 0x1D
-                    log.debug(
-                        "<<<<<<<<<<<<<<<<<<<<<<< 找到下一个物体第一个变换矩阵结尾 %s",
-                        hex(data_start),
-                    )
-                    return data_start
-            else:
-                log.debug("数据不足，无法读取")
-                return None  # 或者根据实际情况返回合适的值
-        else:
+    # 逐字节检查
+    while data_start < data_len - 0x1D:  # 确保剩余数据足够检查头部
+        # 疑似变换矩阵组数
+        vg = struct.unpack_from("<I", data, data_start + 0x8)[0]
+        # 疑似贴图索引
+        di = struct.unpack_from("<I", data, data_start + 0x14)[0]
+        # 疑似变换矩阵总字节
+        vb = struct.unpack_from("<I", data, data_start + 0x19)[0]
+        # log.debug("vg: %s vb: %s vg*bs: %s", hex(vg), hex(vb), hex(vg * block_size))
+
+        if vg >= vb:
             data_start += 1
-            # log.debug("!= 0xff : %s",hex(data_start))
+            # log.debug("*** vg >= vb,跳过1字节 data_start: %s", hex(data_start))
+            continue
+        # 非0判断
+        if vg == 0x0:
+            data_start += 1
+            # log.debug("*** vg == 0x0,跳过1字节 data_start: %s", hex(data_start))
+            continue
+        if vb == 0x0:
+            data_start += 1
+            # log.debug("*** vb == 0x0,跳过1字节 data_start: %s", hex(data_start))
+            continue
+        # 贴图索引不可能太大
+        if di > 0xFF:
+            data_start += 1
+            # log.debug(
+            #     "***!!! di > 0xA,跳过1字节 data_start: %s ,di: %s",
+            #     hex(data_start),
+            #     hex(di),
+            # )
+            continue
+
+        # 判断是否为物体头部
+        if vg * block_size == vb:
+            log.debug("!!!@@@ 找到下一个物体头部: %s", hex(data_start))
+            return data_start
+
+        data_start += 1
+
+    log.debug(
+        "!!!@@@!!! 没有找到下一个物体头部,开始查找地址: %s",
+        hex(data_start),
+    )
+    return None
 
 
 def read_map_first_head(self, data):
@@ -56,9 +77,7 @@ def read_map_first_head(self, data):
     # 读取位置
     data_index = 0
 
-    # 确保有足够的数据 216CC5 287390
-    # 29DEBC
-    # 衔接地址 1BA288
+    # 确保有足够的数据
     if len(data) < 24:
         log.debug("Error: Not enough data")
         return
@@ -77,7 +96,7 @@ def read_map_first_head(self, data):
 # 定义读取头部信息函数
 def read_head(self, data, start_index):
     """读取头部信息"""
-    log.debug(">>> 开始读取头部信息")
+    log.debug("↓↓↓↓↓↓↓ >>> 开始读取头部信息 st: %s ↓↓↓↓↓↓", hex(start_index))
 
     # 检查是否有足够的字节数进行解包
     if len(data) < start_index + 29:
@@ -103,7 +122,10 @@ def read_head(self, data, start_index):
     # 打印头部信息
     log.debug(
         "<<< 网格物体数量: %s 本物体面数据组数量 %s 本网格变换矩阵数量: %s 本网格字节总数: %s",
-        hex(mesh_obj_number), hex(mesh_face_group_number), hex(mesh_matrices_number), hex(mesh_byte_size)
+        hex(mesh_obj_number),
+        hex(mesh_face_group_number),
+        hex(mesh_matrices_number),
+        hex(mesh_byte_size),
     )
 
     # 返回文件中包含网格物体数量, 本网格变换矩阵数量, 本网格字节总数
@@ -123,12 +145,12 @@ def read_vertices(self, vertices_data, mesh_matrices_number, mesh_byte_size):
 
     # 数据块的大小 (0x34)
     block_size = int(mesh_byte_size / mesh_matrices_number)
-    if block_size != 52:
-        log.debug("! 数据块的大小计算失败: %s", block_size)
-        # self.report({"ERROR"}, "数据块的大小计算失败")
-        traceback.print_exc()
-        # return {"CANCELLED"}
-        return None
+    # if block_size != 52:
+    #     log.debug("! 数据块的大小计算失败: %s", block_size)
+    #     # self.report({"ERROR"}, "数据块的大小计算失败")
+    #     traceback.print_exc()
+    #     # return {"CANCELLED"}
+    #     return None
 
     log.debug("> 数据块的大小: %s", hex(block_size))
 
@@ -146,8 +168,8 @@ def read_vertices(self, vertices_data, mesh_matrices_number, mesh_byte_size):
                 vertices.append((vx, vy, vz))
 
                 # 读取法线数据
-                nx = tools.read_half_float(vertices_data, mniv + 0x0c)
-                ny = tools.read_half_float(vertices_data, mniv + 0x0e)
+                nx = tools.read_half_float(vertices_data, mniv + 0x0C)
+                ny = tools.read_half_float(vertices_data, mniv + 0x0E)
                 nz = tools.read_half_float(vertices_data, mniv + 0x10)
                 normals.append((nx, ny, nz))
                 # log.debug(">> 读取法线数据: %s , %s , %s", nx, ny, nz)
@@ -171,7 +193,7 @@ def read_vertices(self, vertices_data, mesh_matrices_number, mesh_byte_size):
 
     log.debug("<<< 顶点数据解析完成: %s 组", len(vertices))
 
-    return vertices, normals, uvs
+    return vertices, normals, uvs, block_size
 
 
 # 定义解析面数据函数
@@ -214,13 +236,14 @@ def split_mesh(self, data):
     data_start = data_index
     log.debug("> fix数据起始位置: %s", hex(data_start))
 
-    # 临时计数
-    temp_num = 0
+    # 总物体数
+    total_mesh_obj_number = 0
+    # 已读计数
+    readed_index = 0
 
     try:
-        while True:
-            temp_num += 1
 
+        while True:
             # 读取头部信息
             read_head_temp = read_head(self, data, data_start)
             # 判断是否读取失败
@@ -231,8 +254,12 @@ def split_mesh(self, data):
             # 解析头部信息 -> 文件中包含网格物体数量, 本网格变换矩阵数量, 本网格字节总数
             mesh_obj_number, mesh_matrices_number, mesh_byte_size = read_head_temp
 
+            # 更新总物体数
+            if total_mesh_obj_number == 0:
+                total_mesh_obj_number = mesh_obj_number
+
             # 获取顶点数据长度
-            vertices_data = data[data_start + 0x1D: data_start + 0x1D + mesh_byte_size]
+            vertices_data = data[data_start + 0x1D : data_start + 0x1D + mesh_byte_size]
             log.debug("> 获取顶点数据长度: %s", hex(len(vertices_data)))
             if len(vertices_data) <= 0:
                 log.debug("! 获取顶点数据长度失败")
@@ -250,39 +277,58 @@ def split_mesh(self, data):
                 # return mesh_obj
                 break
             # 顶点数据, UV坐标数据, 切线数据
-            vertices_array, normals, uvs = read_vertices_temp
+            vertices_array, normals, uvs, block_size = read_vertices_temp
 
             # 获取面数据块大小
             faces_data_size = struct.unpack(
                 "<I",
                 data[
-                data_start
-                + 0x1D
-                + mesh_byte_size: data_start
-                                  + 0x1D
-                                  + mesh_byte_size
-                                  + 4
+                    data_start
+                    + 0x1D
+                    + mesh_byte_size : data_start
+                    + 0x1D
+                    + mesh_byte_size
+                    + 4
                 ],
             )[0]
             log.debug("> 获取面数据块大小: %s", hex(faces_data_size))
-            if faces_data_size >= len(data):
+            if data_start + 0x1D + mesh_byte_size + 0x4 + faces_data_size >= len(data):
                 log.debug(
                     "! 获取面数据块失败,遇到还未识别的数据块！ 开始地址:%s 偏移地址: %s",
-                    hex(data_start + 0x1D), hex(data_start + 0x1D + mesh_byte_size)
+                    hex(data_start + 0x1D),
+                    hex(data_start + 0x1D + mesh_byte_size),
                 )
-                break
+
+                # 读取剩余数据(着色器,贴图,动画等) -> 是否存在另一个物体, 另一个物体头部地址
+                find_start = find_next_head(
+                    data,
+                    data_start + 0x1D + mesh_byte_size,
+                    block_size,
+                )
+                if find_start is None:
+                    log.debug(
+                        "! 111未找到下一个物体头部地址, mesh_obj len: %s",
+                        hex(len(mesh_obj)),
+                    )
+                    # 直接停止!
+                    break
+                data_start = find_start
+                # 已读+1
+                readed_index += 1
+                continue
+                # break
             # 获取面数据块
             faces_data_block = data[
-                               data_start
-                               + 0x1D
-                               + mesh_byte_size
-                               + 4: data_start
-                                    + 0x1D
-                                    + mesh_byte_size
-                                    + 4
-                                    + faces_data_size
-                               ]
-            log.debug("> 索引地址: %s", hex(data_start + 0x1d + mesh_byte_size + 4))
+                data_start
+                + 0x1D
+                + mesh_byte_size
+                + 4 : data_start
+                + 0x1D
+                + mesh_byte_size
+                + 4
+                + faces_data_size
+            ]
+            log.debug("> 索引地址: %s", hex(data_start + 0x1D + mesh_byte_size + 4))
             log.debug("> 获取面数据块: %s", hex(len(faces_data_block)))
             # 解析面数据块
             faces_array = read_faces(self, faces_data_block, len(faces_data_block))
@@ -291,6 +337,75 @@ def split_mesh(self, data):
                 log.debug("! 解析面数据失败")
                 # return mesh_obj
                 break
+
+            # # 向mesh_obj中添加数据
+            # mesh_obj.append(
+            #     {
+            #         "vertices": {
+            #             "mesh_obj_number": mesh_obj_number,
+            #             "mesh_matrices_number": mesh_matrices_number,
+            #             "mesh_byte_size": mesh_byte_size,
+            #             "data": vertices_array,
+            #         },
+            #         "faces": {"size": faces_data_size, "data": faces_array},
+            #         "uvs": uvs,
+            #         "normals": normals,
+            #         "colormap": color_map_val
+            #     }
+            # )
+
+            # 结束位置,也是新的开始
+            data_start += 0x1D + mesh_byte_size + 4 + faces_data_size
+            log.debug("> data_start: %s", hex(data_start))
+
+            # 已读+1
+            readed_index += 1
+            log.debug(
+                "total_mesh_obj_number: %s , readed_index: %s",
+                total_mesh_obj_number,
+                readed_index,
+            )
+
+            if readed_index >= total_mesh_obj_number:
+                log.debug("<<< 数据到达尾部")
+                # 向mesh_obj中添加数据
+                mesh_obj.append(
+                    {
+                        "vertices": {
+                            "mesh_obj_number": mesh_obj_number,
+                            "mesh_matrices_number": mesh_matrices_number,
+                            "mesh_byte_size": mesh_byte_size,
+                            "data": vertices_array,
+                        },
+                        "faces": {"size": faces_data_size, "data": faces_array},
+                        "uvs": uvs,
+                        "normals": normals,
+                        "colormap": {
+                            "path": "",
+                            "name": "",
+                        },
+                    }
+                )
+                break
+
+            # 读取剩余数据(着色器,贴图,动画等) -> 是否存在另一个物体, 另一个物体头部地址
+            find_start = find_next_head(data, data_start, block_size)
+            if find_start is None:
+                log.debug(
+                    "! 未找到下一个物体头部地址, mesh_obj len: %s",
+                    hex(len(mesh_obj)),
+                )
+                # 直接停止!
+                break
+
+            # 贴图等数据
+            colors_data = data[data_start:find_start]
+            # 查找使用的贴图名称
+            find_colormap = red_colormap(self, colors_data)
+            log.debug("> find_colormap: %s", find_colormap)
+
+            # 修改data_start
+            data_start = find_start
 
             # 向mesh_obj中添加数据
             mesh_obj.append(
@@ -304,36 +419,18 @@ def split_mesh(self, data):
                     "faces": {"size": faces_data_size, "data": faces_array},
                     "uvs": uvs,
                     "normals": normals,
+                    "colormap": find_colormap,
                 }
             )
 
-            # 结束位置,也是新的开始
-            data_start += 0x1D + mesh_byte_size + 4 + faces_data_size
-            log.debug("> data_start: %s", hex(data_start))
-
-            # 读取剩余数据(着色器,贴图,动画等) -> 是否存在另一个物体, 另一个物体头部地址
-            find_start = find_next_head(data, data_start)
-            if find_start is None:
-                log.debug("! 未找到下一个物体头部地址, mesh_obj len: %s", hex(len(mesh_obj)))
-                break
-            data_start = find_start
-
-            log.debug("完成获取下一个物体头部地址！！！！！！！！！")
-            # if not nextobj:
-            #     log.debug("! 读取其他物体数据失败")
-            #     # self.report({"ERROR"}, "读取其他物体数据失败")
-            #     traceback.print_exc()
-            #     # return {"CANCELLED"}
-            #     break
-            # # 修正数据起始位置
-            # data_start = next_data_start
+            log.debug("↑↑↑↑↑↑ 完成获取下一个物体头部地址！ ↑↑↑↑↑↑\n")
 
             # 检查是否到达文件末尾
-            if len(mesh_obj) >= mesh_obj[0]["vertices"]["mesh_obj_number"] - 1:
-                log.debug("<<< 数据到达尾部")
-                break
+            # if len(mesh_obj) >= mesh_obj[0]["vertices"]["mesh_obj_number"] - 1:
+            #     log.debug("<<< 数据到达尾部")
+            #     break
 
-        log.debug("返回 mesh_obj！！！")
+        log.debug(" 👇 返回 mesh_obj！！！ 👇 ")
         return mesh_obj
     except Exception as e:
         log.debug("! 分割网格数据失败: %s", e)
@@ -341,3 +438,51 @@ def split_mesh(self, data):
         traceback.print_exc()
         # return {"CANCELLED"}
         return mesh_obj
+
+
+def red_colormap(self, colors_data):
+    """读取使用的贴图名称"""
+    colormap = {
+        "path": "",
+        "name": "",
+    }
+    try:
+        # 将字符串转换为字节序列
+        pattern = b"ColorMap"
+        log.debug("查找: %s", pattern.decode())
+
+        # 查找模式在数据中的位置
+        position = colors_data.find(pattern)
+
+        if position != -1:
+            print(f"找到ColorMap '{pattern.decode()}'，偏移地址: {hex(position)}")
+            colormap_path_len = struct.unpack_from("<I", colors_data, position + 0x8)[0]
+            log.debug("> colormap_text_len: %s", colormap_path_len)
+
+            colormap["path"] = colors_data[
+                position + 0xC : position + 0xC + colormap_path_len
+            ].decode("ascii")
+            log.debug("> colormap_text: %s", colormap["path"])
+
+            # 接下来看情况是否需要去除多余路径只保留贴图名称
+            # 提取文件名
+            colormap["name"] = extract_name_from_path(colormap["path"])
+            log.debug("> extracted_name: %s", colormap["name"])
+
+        else:
+            print("未找到ColorMap")
+
+        return colormap
+    except Exception as e:
+        log.debug("! 解析颜色数据失败: %s", e)
+        traceback.print_exc()
+        return colormap
+
+
+def extract_name_from_path(path):
+    """从路径中提取文件名（不包含扩展名）"""
+    # 分割路径，提取最后一个部分（文件名）
+    file_name_with_extension = path.split("/")[-1]
+    # 移除文件扩展名
+    file_name = file_name_with_extension.split(".")[0]
+    return file_name
