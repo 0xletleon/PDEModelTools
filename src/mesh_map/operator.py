@@ -157,7 +157,7 @@ class ImportMeshMapClass(Operator, ImportHelper):
     bl_options = {"REGISTER", "UNDO"}
 
     filename_ext = ".mesh"
-    filter_glob: StringProperty(default="*.mesh", options={"HIDDEN"}) # type: ignore
+    filter_glob: StringProperty(default="*.mesh", options={"HIDDEN"})  # type: ignore
 
     def execute(self, context: bpy.types.Context) -> Set[str]:
         try:

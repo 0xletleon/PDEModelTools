@@ -2,10 +2,18 @@
 import math
 import os
 import traceback
+from typing import Set
 
 import bpy
 
 from . import utils
+from ..log import log
+
+# 常量定义
+ROTATION_X = math.radians(90)
+DEFAULT_UV_LAYER = "UVMap"
+COLORMAP_NODE_NAME = "Colormap"
+BSDF_NODE_NAME = "Principled BSDF"
 
 
 # 定义操作类
@@ -20,6 +28,10 @@ class ImportMeshPropClass(bpy.types.Operator):
     # 文件扩展名过滤
     filename_ext = ".mesh"
     filter_glob: bpy.props.StringProperty(default="*.mesh", options={"HIDDEN"})  # type: ignore
+
+    def __init__(self):
+        self.context = bpy.types.Context
+        self._processed_materials: Set[str] = set()
 
     # 定义invoke方法来显示文件选择对话框
     def invoke(self, context, event):
@@ -63,6 +75,9 @@ class ImportMeshPropClass(bpy.types.Operator):
                 normals = this_obj["normals"]
                 # 读取UV坐标
                 uvs = this_obj["uvs"]
+                # 读取ColorMap
+                colormap = this_obj["colormap"]
+                log.debug("colormap x :%s", colormap.name)
 
                 # 创建新网格
                 new_mesh = bpy.data.meshes.new(f"{mesh_name}_{idx}")
@@ -97,6 +112,10 @@ class ImportMeshPropClass(bpy.types.Operator):
                 # 设置自定义法向
                 new_mesh.normals_split_custom_set(loop_normals)
 
+                # 设置材质
+                if colormap.name:
+                    self._setup_material(new_obj, colormap.name)
+
                 # 更新网格
                 new_mesh.update()
 
@@ -116,3 +135,51 @@ class ImportMeshPropClass(bpy.types.Operator):
             self.report({"ERROR"}, f"模型加载失败: {e}")
             traceback.print_exc()
             return {"CANCELLED"}
+
+    def _setup_material(self, obj: bpy.types.Object, colormap_name: str) -> None:
+        """设置材质"""
+        # 检查材质是否已存在
+        if colormap_name in self._processed_materials:
+            mat = bpy.data.materials[colormap_name]
+        else:
+            mat = self._create_material(colormap_name)
+            self._processed_materials.add(colormap_name)
+
+        # 分配材质
+        if obj.data.materials:
+            obj.data.materials[0] = mat
+        else:
+            obj.data.materials.append(mat)
+
+    def _create_material(self, colormap_name: str) -> bpy.types.Material:
+        """创建材质"""
+        mat = bpy.data.materials.new(name=colormap_name)
+        mat.use_nodes = True
+        nodes = mat.node_tree.nodes
+        links = mat.node_tree.links
+
+        # 清理默认节点
+        nodes.clear()
+
+        # 创建节点
+        bsdf = nodes.new(type="ShaderNodeBsdfPrincipled")
+        bsdf.name = BSDF_NODE_NAME
+        bsdf.location = (0, 0)
+
+        tex_node = nodes.new(type="ShaderNodeTexImage")
+        tex_node.name = COLORMAP_NODE_NAME
+        tex_node.location = (-300, 0)
+        tex_node.image = self._get_texture(colormap_name)
+
+        output = nodes.new(type="ShaderNodeOutputMaterial")
+        output.location = (300, 0)
+
+        # 连接节点
+        links.new(bsdf.inputs["Base Color"], tex_node.outputs["Color"])
+        links.new(output.inputs["Surface"], bsdf.outputs["BSDF"])
+
+        return mat
+
+    def _get_texture(self, name: str) -> bpy.types.Image:
+        """获取或加载贴图"""
+        return bpy.data.images.get(name)
