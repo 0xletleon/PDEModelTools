@@ -1,4 +1,4 @@
-# mesh_wcm\utils.py
+# mesh_cw\utils.py
 import struct
 import traceback
 
@@ -96,7 +96,10 @@ def read_head(data, start_index):
     # 打印头部信息
     log.debug(
         "<<< 网格物体数量: %s 本物体面数据组数量 %s 本网格变换矩阵数量: %s 本网格字节总数: %s",
-        hex(mesh_obj_number), hex(mesh_face_group_number), hex(mesh_matrices_number), hex(mesh_byte_size)
+        hex(mesh_obj_number),
+        hex(mesh_face_group_number),
+        hex(mesh_matrices_number),
+        hex(mesh_byte_size),
     )
 
     # 返回文件中包含网格物体数量, 本物体面数据组数量, 本网格变换矩阵数量, 本网格字节总数
@@ -109,7 +112,7 @@ def read_vertices(self, vertices_data, mesh_matrices_number, mesh_byte_size):
     log.debug(">>> 开始解析顶点数据")
     # 顶点数据
     vertices = []
-    # 法线数据
+    # 法向数据
     normals = []
     # UV 坐标数据
     uvs = []
@@ -137,12 +140,12 @@ def read_vertices(self, vertices_data, mesh_matrices_number, mesh_byte_size):
                 # 将顶点添加到顶点列表
                 vertices.append((vx, vy, vz))
 
-                # 读取法线数据
-                nx = tools.read_half_float(vertices_data, mniv + 0x0c)
-                ny = tools.read_half_float(vertices_data, mniv + 0x0e)
+                # 读取法向数据
+                nx = tools.read_half_float(vertices_data, mniv + 0x0C)
+                ny = tools.read_half_float(vertices_data, mniv + 0x0E)
                 nz = tools.read_half_float(vertices_data, mniv + 0x10)
                 normals.append((nx, ny, nz))
-                # log.debug(">> 读取法线数据: %s , %s , %s", nx, ny, nz)
+                # log.debug(">> 读取法向数据: %s , %s , %s", nx, ny, nz)
 
                 # 读取UV坐标
                 uv_start = mniv + block_size - 8
@@ -163,7 +166,7 @@ def read_vertices(self, vertices_data, mesh_matrices_number, mesh_byte_size):
         return None
 
     log.debug("<<< 顶点数据解析完成: %s 组", hex(len(vertices)))
-    # 返回 顶点数据, 法线数据, UV坐标数据
+    # 返回 顶点数据, 法向数据, UV坐标数据
     return vertices, normals, uvs
 
 
@@ -234,7 +237,7 @@ def split_mesh(self, data):
             ) = read_head_temp
 
             # 获取顶点数据长度
-            vertices_data = data[data_start + 0x1D: data_start + 0x1D + mesh_byte_size]
+            vertices_data = data[data_start + 0x1D : data_start + 0x1D + mesh_byte_size]
             log.debug("> 获取顶点数据长度: %s", hex(len(vertices_data)))
             if len(vertices_data) <= 0:
                 log.debug("! 获取顶点数据长度失败")
@@ -259,27 +262,27 @@ def split_mesh(self, data):
             faces_data_size = struct.unpack(
                 "<I",
                 data[
-                data_start
-                + 0x1D
-                + mesh_byte_size: data_start
-                                  + 0x1D
-                                  + mesh_byte_size
-                                  + 4
+                    data_start
+                    + 0x1D
+                    + mesh_byte_size : data_start
+                    + 0x1D
+                    + mesh_byte_size
+                    + 4
                 ],
             )[0]
             log.debug("> 获取面数据块大小: %s", hex(faces_data_size))
             # 获取面数据块
             faces_data_block = data[
-                               data_start
-                               + 0x1D
-                               + mesh_byte_size
-                               + 4: data_start
-                                    + 0x1D
-                                    + mesh_byte_size
-                                    + 4
-                                    + faces_data_size
-                               ]
-            log.debug("> 索引地址: %s", hex(data_start + 0x1d + mesh_byte_size + 4))
+                data_start
+                + 0x1D
+                + mesh_byte_size
+                + 4 : data_start
+                + 0x1D
+                + mesh_byte_size
+                + 4
+                + faces_data_size
+            ]
+            log.debug("> 索引地址: %s", hex(data_start + 0x1D + mesh_byte_size + 4))
             log.debug("> 获取面数据块: %s", hex(len(faces_data_block)))
             # 解析面数据块
             faces_array = read_faces(self, faces_data_block, len(faces_data_block))
@@ -321,6 +324,7 @@ def split_mesh(self, data):
         traceback.print_exc()
         # return {"CANCELLED"}
         return mesh_obj
+
 
 # def read_half_float(data, offset):
 #     try:

@@ -12,12 +12,22 @@ class ImportPanel(bpy.types.Panel):
     bl_category = "PMT"
 
     def draw(self, context):
+        """绘制面板"""
         layout = self.layout
-        layout.label(text="导入MESH")
-        layout.operator("import.mesh_prop", text="道具模型")
-        layout.operator("import.mesh_map", text="地图模型")
-        layout.operator("import.wcm_mesh", text="武器和人物模型")
-        layout.label(text="导入ANIM")
-        layout.operator("import.anim", text="导入动画", icon="IMPORT")
-        layout.label(text="导入SKEL")
-        layout.operator("import.skel", text="导入骨骼", icon="IMPORT")
+        # 定义按钮配置 (标签, 操作符, 图标)
+        button_configs = [
+            ("导入模型", "", "FILE_3D"),
+            ("", "import.mesh_prop", "道具 / Prop"),
+            ("", "import.mesh_map", "地图 / Map"),
+            ("", "import.cm_mesh", "人物&武器 / Character&Weapon"),
+            ("导入动画", "", "POSE_HLT"),
+            ("", "import.anim", "动画 / Anim"),
+            ("导入骨骼", "", "GROUP_BONE"),
+            ("", "import.skel", "骨骼 / Skel"),
+        ]
+
+        for label, operator, text in button_configs:
+            if label:  # 分类标签
+                layout.label(text=label, icon=text)
+            else:  # 操作按钮
+                layout.operator(operator, text=text)

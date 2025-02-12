@@ -1,11 +1,11 @@
 # __init__.py
 import bpy
 
-from . import ui,log
+from . import ui
 from .anim.operator import ImportAnimClass
 from .mesh_map.operator import ImportMeshMapClass
 from .mesh_prop.operator import ImportMeshPropClass
-from .mesh_wcm.operator import ImportMeshWCMClass
+from .mesh_cw.operator import ImportMeshCWClass
 from .skel.operator import ImportSkelClass
 
 # 类表
@@ -13,7 +13,7 @@ classes = (
     ui.ImportPanel,
     ImportMeshPropClass,
     ImportMeshMapClass,
-    ImportMeshWCMClass,
+    ImportMeshCWClass,
     ImportAnimClass,
     ImportSkelClass,
 )

@@ -1,4 +1,4 @@
-# mesh_wcm\operator.py
+# mesh_cw\operator.py
 import math
 import os
 import traceback
@@ -10,10 +10,10 @@ from ..log import log
 
 
 # 定义操作类
-class ImportMeshWCMClass(bpy.types.Operator):
+class ImportMeshCWClass(bpy.types.Operator):
     """Import a .mesh file"""
 
-    bl_idname = "import.wcm_mesh"
+    bl_idname = "import.cm_mesh"
     bl_label = "导入武器和人物.mesh"
     bl_options = {"REGISTER", "UNDO"}
     # 使用bpy.props定义文件路径属性
@@ -63,16 +63,14 @@ class ImportMeshWCMClass(bpy.types.Operator):
                 vertices = mesh_item["vertices"]["data"]
                 # 读取面数据
                 faces = mesh_item["faces"]["data"]
-                # 获取法线数据
+                # 获取法向数据
                 normals = mesh_item["normals"]
                 # 读取UV坐标
                 uvs = mesh_item["uvs"]
 
                 # 创建新网格
                 new_mesh = bpy.data.meshes.new(f"{obj_name}_{idx}")
-                new_obj = bpy.data.objects.new(
-                    f"{obj_name}_{idx}", new_mesh
-                )
+                new_obj = bpy.data.objects.new(f"{obj_name}_{idx}", new_mesh)
 
                 # 将对象添加到场景中
                 context.collection.objects.link(new_obj)
@@ -94,13 +92,13 @@ class ImportMeshWCMClass(bpy.types.Operator):
                 # 启用平滑着色
                 new_mesh.shade_smooth()
 
-                # 准备法线数据
+                # 准备法向数据
                 loop_normals = []
                 for poly in new_mesh.polygons:
                     for vertex_idx in poly.vertices:
                         loop_normals.append(normals[vertex_idx])
 
-                # 设置自定义法线
+                # 设置自定义法向
                 new_mesh.normals_split_custom_set(loop_normals)
 
                 # 更新网格

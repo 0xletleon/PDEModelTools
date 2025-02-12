@@ -1,152 +1,201 @@
-# mesh_map\operator.py
-import math
+"""
+mesh_map.operator
+~~~~~~~~~~~~~~~~
+
+用于导入和处理地图网格数据。
+
+主要功能:
+- 导入 .mesh 地图文件
+- 创建 地图网格对象
+- 设置材质贴图名称 
+"""
+
 import os
-
+import math
 import bpy
-
+from typing import Set
+from bpy_extras.io_utils import ImportHelper
+from bpy.props import StringProperty
+from bpy.types import Operator
 from . import utils
 from ..log import log
 
+# 常量定义
+ROTATION_X = math.radians(90)
+DEFAULT_UV_LAYER = "UVMap"
+COLORMAP_NODE_NAME = "Colormap"
+BSDF_NODE_NAME = "Principled BSDF"
 
-# 定义操作类
-class ImportMeshMapClass(bpy.types.Operator):
-    """Import a .mesh file"""
+
+class MeshImporter:
+    """网格导入器"""
+
+    def __init__(self, context: bpy.types.Context):
+        self.context = context
+        self._processed_materials: Set[str] = set()
+
+    def create_mesh_object(
+        self, mesh_data: utils.MeshData, base_name: str, index: int
+    ) -> bpy.types.Object:
+        """创建网格对象"""
+        # 创建网格
+        name = f"{base_name}_{index}"
+        mesh = bpy.data.meshes.new(name)
+        obj = bpy.data.objects.new(name, mesh)
+
+        # 链接到场景
+        self.context.collection.objects.link(obj)
+
+        # 构建几何体
+        self._build_geometry(mesh, mesh_data)
+
+        # 设置变换
+        self._setup_transform(obj)
+
+        # 设置材质
+        if mesh_data.colormap.name:
+            self._setup_material(obj, mesh_data.colormap.name)
+
+        return obj
+
+    def _build_geometry(self, mesh: bpy.types.Mesh, mesh_data: utils.MeshData) -> None:
+        """构建网格几何体"""
+        # 创建顶点和面
+        mesh.from_pydata(mesh_data.vertices["data"], [], mesh_data.faces["data"])
+
+        # 创建UV和法向
+        self._create_uvs(mesh, mesh_data.uvs)
+        self._create_normals(mesh, mesh_data.normals)
+
+        # 更新网格
+        mesh.update()
+
+    def _create_uvs(self, mesh: bpy.types.Mesh, uvs: list) -> None:
+        """创建 UV 映射"""
+        uv_layer = mesh.uv_layers.new(name=DEFAULT_UV_LAYER)
+        for poly in mesh.polygons:
+            for loop_idx in poly.loop_indices:
+                vert_idx = mesh.loops[loop_idx].vertex_index
+                if vert_idx >= len(uvs):
+                    # 处理缺少 UV 数据的情况
+                    # log.error(f"顶点索引 {vert_idx} 超出 UV 列表长度 {len(uvs)}")
+                    uv_coord = (0.0, 0.0)  # 默认 UV
+                else:
+                    uv_coord = uvs[vert_idx]
+                uv_layer.data[loop_idx].uv = uv_coord
+
+    def _create_normals(self, mesh: bpy.types.Mesh, normals: list) -> None:
+        loop_normals = []
+        for poly in mesh.polygons:
+            for v in poly.vertices:
+                if v >= len(normals):
+                    loop_normals.append((0.0, 0.0, 1.0))  # Default normal
+                else:
+                    loop_normals.append(normals[v])
+
+        mesh.normals_split_custom_set(loop_normals)
+
+    def _setup_transform(self, obj: bpy.types.Object) -> None:
+        """设置对象变换"""
+        obj.rotation_mode = "XYZ"
+        obj.rotation_euler = (ROTATION_X, 0, 0)
+
+    def _setup_material(self, obj: bpy.types.Object, colormap_name: str) -> None:
+        """设置材质"""
+        # 检查材质是否已存在
+        if colormap_name in self._processed_materials:
+            mat = bpy.data.materials[colormap_name]
+        else:
+            mat = self._create_material(colormap_name)
+            self._processed_materials.add(colormap_name)
+
+        # 分配材质
+        if obj.data.materials:
+            obj.data.materials[0] = mat
+        else:
+            obj.data.materials.append(mat)
+
+    def _create_material(self, colormap_name: str) -> bpy.types.Material:
+        """创建材质"""
+        mat = bpy.data.materials.new(name=colormap_name)
+        mat.use_nodes = True
+        nodes = mat.node_tree.nodes
+        links = mat.node_tree.links
+
+        # 清理默认节点
+        nodes.clear()
+
+        # 创建节点
+        bsdf = nodes.new(type="ShaderNodeBsdfPrincipled")
+        bsdf.name = BSDF_NODE_NAME
+        bsdf.location = (0, 0)
+
+        tex_node = nodes.new(type="ShaderNodeTexImage")
+        tex_node.name = COLORMAP_NODE_NAME
+        tex_node.location = (-300, 0)
+        tex_node.image = self._get_texture(colormap_name)
+
+        output = nodes.new(type="ShaderNodeOutputMaterial")
+        output.location = (300, 0)
+
+        # 连接节点
+        links.new(bsdf.inputs["Base Color"], tex_node.outputs["Color"])
+        links.new(output.inputs["Surface"], bsdf.outputs["BSDF"])
+
+        return mat
+
+    def _get_texture(self, name: str) -> bpy.types.Image:
+        """获取或加载贴图"""
+        return bpy.data.images.get(name)
+
+
+class ImportMeshMapClass(Operator, ImportHelper):
+    """导入 .mesh 地图模型"""
 
     bl_idname = "import.mesh_map"
     bl_label = "导入.mesh地图模型"
     bl_options = {"REGISTER", "UNDO"}
-    # 使用bpy.props定义文件路径属性
-    filepath: bpy.props.StringProperty(subtype="FILE_PATH", default="")  # type: ignore
-    # 文件扩展名过滤
+
     filename_ext = ".mesh"
-    filter_glob: bpy.props.StringProperty(default="*.mesh", options={"HIDDEN"})  # type: ignore
+    filter_glob: StringProperty(default="*.mesh", options={"HIDDEN"}) # type: ignore
 
-    def execute(self, context):
-        # 清除当前场景中的所有物体
-        # bpy.ops.object.select_all(action="SELECT")
-        # bpy.ops.object.delete()
-
+    def execute(self, context: bpy.types.Context) -> Set[str]:
         try:
-            # 定义数据文件的路径
-            file_path = self.filepath
-            # 检查文件是否存在
-            if not os.path.exists(file_path):
-                self.report({"ERROR"}, "文件不存在，请检查路径是否正确")
-                return {"CANCELLED"}
-
-            # 读取二进制文件
-            data = None
-            with open(file_path, "rb") as file:
-                data = file.read()
-
-            # 获得文件名(不带后缀)
-            mesh_name = os.path.splitext(os.path.basename(file_path))[0]
-
-            # 分割网格数据
-            mesh_obj = utils.split_mesh(self, data)
-
-            # 循环索引
-            idx = 1
-            # 读取数据块
-            for this_obj in mesh_obj:
-                # 读取顶点数据
-                vertices = this_obj["vertices"]["data"]
-                # 读取面数据
-                faces = this_obj["faces"]["data"]
-                # 读取法线
-                normals = this_obj["normals"]
-                # 读取UV坐标
-                uvs = this_obj["uvs"]
-                # 贴图名称 ColorMap
-                colormap = this_obj["colormap"]
-
-                # 创建新网格
-                new_mesh = bpy.data.meshes.new(f"{mesh_name}_{idx}")
-                new_obj = bpy.data.objects.new(f"{mesh_name}_{idx}", new_mesh)
-
-                # 将对象添加到场景中
-                context.collection.objects.link(new_obj)
-
-                # 创建顶点 点, 线, 面
-                new_mesh.from_pydata(vertices, [], faces)
-
-                # 创建UV图层
-                uv_layer = new_mesh.uv_layers.new(name="UVMap")
-
-                # 为每个循环（loop）设置UV坐标
-                for face in new_mesh.polygons:
-                    for loop_idx in face.loop_indices:
-                        # 获取顶点索引
-                        vertex_idx = new_mesh.loops[loop_idx].vertex_index
-                        # 设置UV坐标
-                        uv_layer.data[loop_idx].uv = uvs[vertex_idx]
-
-                # 启用平滑着色
-                new_mesh.shade_smooth()
-
-                # 准备法线数据
-                loop_normals = []
-                for poly in new_mesh.polygons:
-                    for vertex_idx in poly.vertices:
-                        loop_normals.append(normals[vertex_idx])
-
-                # 设置自定义法线
-                new_mesh.normals_split_custom_set(loop_normals)
-
-                # 更新网格
-                new_mesh.update()
-
-                # 设置物体的位置
-                new_obj.location = (0, 0, 0)
-                # 首先，设置旋转模式为欧拉角
-                new_obj.rotation_mode = "XYZ"
-                # 设置X轴的旋转值为90度（转换为弧度）
-                new_obj.rotation_euler = (math.radians(90), 0, 0)
-
-                # 检查是否有有效的贴图名称
-                if colormap["name"]:
-                    # 创建材质并设置贴图名称
-                    material = bpy.data.materials.new(name=colormap["name"])
-                    material.use_nodes = True
-                    nodes = material.node_tree.nodes
-
-                    # 清除默认的节点
-                    for node in nodes:
-                        nodes.remove(node)
-
-                    # 创建一个 Principled BSDF 节点
-                    bsdf = nodes.new(type="ShaderNodeBsdfPrincipled")
-                    bsdf.location = (0, 0)
-
-                    # 创建一个 Material Output 节点
-                    output_node = nodes.new(type="ShaderNodeOutputMaterial")
-                    output_node.location = (300, 0)
-
-                    # 连接节点
-                    material.node_tree.links.new(
-                        output_node.inputs["Surface"], bsdf.outputs["BSDF"]
-                    )
-
-                    # 将材质分配给对象
-                    if new_obj.data.materials:
-                        new_obj.data.materials[0] = material
-                    else:
-                        new_obj.data.materials.append(material)
-                else:
-                    log.debug("没有找到有效的贴图名称，跳过材质创建")
-
-                # 循环索引+1
-                idx += 1
-
-            self.report({"INFO"}, "模型加载成功")
-            return {"FINISHED"}
+            return self._execute_main(context)
         except Exception as e:
-            self.report({"ERROR"}, f"地图模型加载失败: {e}")
-            utils.traceback.print_exc()
+            log.error("操作失败: %s", e, exc_info=True)
+            self.report({"ERROR"}, f"严重错误: {str(e)}")
             return {"CANCELLED"}
 
-    # 定义invoke方法来显示文件选择对话框
-    def invoke(self, context, event):
-        # 调用文件选择对话框
-        context.window_manager.fileselect_add(self)
-        return {"RUNNING_MODAL"}
+    def _execute_main(self, context: bpy.types.Context) -> Set[str]:
+        """主要执行逻辑"""
+        # 检查文件路径
+        if not os.path.exists(self.filepath):
+            self.report({"ERROR"}, "文件路径不存在")
+            return {"CANCELLED"}
+
+        # 读取网格数据
+        mesh_file = utils.MeshFile(self.filepath)
+        mesh_objects = mesh_file.read()
+
+        if not mesh_objects:
+            self.report({"ERROR"}, "未能读取到有效的网格数据")
+            return {"CANCELLED"}
+
+        # 创建导入器
+        importer = MeshImporter(context)
+
+        # 获取基础名称
+        base_name = os.path.splitext(os.path.basename(self.filepath))[0]
+
+        # 处理每个网格对象
+        for idx, mesh_data in enumerate(mesh_objects, 1):
+            if not mesh_data.normals or len(mesh_data.normals) != len(
+                mesh_data.vertices.get("data", [])
+            ):
+                log.error(f"跳过网格 {idx}: 法向数据不匹配")
+                continue
+            importer.create_mesh_object(mesh_data, base_name, idx)
+
+        self.report({"INFO"}, f"成功导入 {len(mesh_objects)} 个网格对象")
+        return {"FINISHED"}

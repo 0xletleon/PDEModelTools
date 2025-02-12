@@ -88,13 +88,13 @@ class ImportMeshPropClass(bpy.types.Operator):
                 # 启用平滑着色
                 new_mesh.shade_smooth()
 
-                # 准备法线数据
+                # 准备法向数据
                 loop_normals = []
                 for poly in new_mesh.polygons:
                     for vertex_idx in poly.vertices:
                         loop_normals.append(normals[vertex_idx])
 
-                # 设置自定义法线
+                # 设置自定义法向
                 new_mesh.normals_split_custom_set(loop_normals)
 
                 # 更新网格
