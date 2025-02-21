@@ -27,17 +27,17 @@ def read_dynamic_head(self, data):
     log.debug(">>> 开始读取头部信息")
 
     try:
-        # 网格信息
-        mesh_info = []
+        # 物体名称
+        obj_names = []
         # 文件读取位置
         data_index = 0
-        # 读取包含的对象数量1
-        include_obj_number1 = struct.unpack_from("<I", data, data_index)[0]
+        # 读取包含物体数量
+        obj_count = struct.unpack_from("<I", data, data_index)[0]
         # 修正数据读取位置
         data_index += 0x4
 
         # 读取包含的对象名称
-        for _ in range(include_obj_number1):
+        for _ in range(obj_count):
             # 读取物体名称长度
             name_length = struct.unpack_from("<I", data, data_index)[0]
             # 修正数据读取位置
@@ -48,24 +48,24 @@ def read_dynamic_head(self, data):
             ].decode("utf-8")
             log.debug("对象名称: %s", obj_name)
             # 保存名称
-            mesh_info.append(obj_name)
+            obj_names.append(obj_name)
             # 修正数据读取位置
             data_index += name_length
 
-        # 读取包含的对象数量2
-        include_obj_number2 = struct.unpack_from("<I", data, data_index)[0]
+        # 读取包含物体数量2
+        obj_count2 = struct.unpack_from("<I", data, data_index)[0]
         # 修正数据读取位置
         data_index += 0x4
 
         # 检查头部数量是否一致
-        if include_obj_number1 != include_obj_number2:
+        if obj_count != obj_count2:
             log.debug("! 头部信息解析失败: 包含的对象数量不一致")
             self.report({"ERROR"}, "头部信息解析失败")
             traceback.print_exc()
             return {"CANCELLED"}
 
         # 跳过物体的 MinPos MaxPos
-        skip_len = include_obj_number1 * 0x18
+        skip_len = obj_count * 0x18
         log.debug("data_index: %s", hex(data_index))
 
         # 修正数据读取位置
@@ -74,7 +74,7 @@ def read_dynamic_head(self, data):
         log.debug("data_index: %s skip_len: %s", hex(data_index), hex(skip_len))
 
         # 返回 物体开始位置，物体信息
-        return data_index, mesh_info
+        return data_index, obj_names
     except Exception as e:
         log.debug("! 读取头部信息失败: %s", e)
         self.report({"ERROR"}, "读取头部信息失败")
@@ -220,14 +220,14 @@ def split_mesh(self, data):
     mesh_obj = []
 
     # 读取动态头部
-    data_index, mesh_info = read_dynamic_head(self, data)
+    data_index, obj_names = read_dynamic_head(self, data)
     # 修正数据起始位置
     data_start = data_index
     log.debug("> fix数据起始位置: %s", hex(data_start))
 
     try:
-        for mi_name in mesh_info:
-            log.debug(">>> 读取网格信息名称: %s", mi_name)
+        for obj_name in obj_names:
+            log.debug(">>> @@@ 读取网格信息名称: %s", obj_name)
 
             # 读取头部信息
             read_head_temp = read_head(data, data_start)
@@ -310,7 +310,7 @@ def split_mesh(self, data):
             # 向mesh_obj中添加数据
             mesh_obj.append(
                 {
-                    "name": str(mi_name),
+                    "name": str(obj_name),
                     "vertices": {
                         "mesh_obj_number": mesh_obj_number,
                         "mesh_matrices_number": mesh_matrices_number,
@@ -328,9 +328,6 @@ def split_mesh(self, data):
             log.debug(
                 "len(mesh_obj): %s ,mesh_obj_number: %s", len(mesh_obj), mesh_obj_number
             )
-            # if len(mesh_obj) >= mesh_obj_number:
-            #     log.debug("<<< 数据到达尾部")
-            #     break
 
             # 查找下一个头部
             next_mesh_start = find_next_head(data, data_start, block_size)

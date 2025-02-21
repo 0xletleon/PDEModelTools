@@ -63,6 +63,7 @@ class ImportMeshCWClass(bpy.types.Operator):
 
             # 分割网格数据
             mesh_obj = utils.split_mesh(self, data)
+            log.debug("<<< mesh_obj长度: %s", len(mesh_obj))
 
             # 循环索引
             idx = 0
@@ -70,6 +71,7 @@ class ImportMeshCWClass(bpy.types.Operator):
             for mesh_item in mesh_obj:
                 # 物体名称
                 obj_name = mesh_item["name"]
+                log.debug("<<< 正在创建物体名称: %s", obj_name)
                 # 读取顶点数据
                 vertices = mesh_item["vertices"]["data"]
                 # 读取面数据
