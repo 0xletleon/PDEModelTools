@@ -40,7 +40,9 @@ class ImportSkelClass(bpy.types.Operator):
             file_name = os.path.splitext(os.path.basename(file_path))[0]
 
             # 骨骼名称和层级关系
-            bones = []
+            bones = [
+                ("root_skel", -1),  # 默认添加一个根骨骼
+            ]
             # 骨骼变换数据
             transforms = []
 
@@ -73,29 +75,35 @@ class ImportSkelClass(bpy.types.Operator):
                     current_position = file.tell()
                     # 获取下一个骨骼名称长度
                     next_name_length = struct.unpack("<I", file.read(4))[0]
-                    # 向尾部移动23字节(+前面的4字节)(一个数据块大小为28(0x1C)字节)
-                    file.seek(23, 1)
+                    # 向尾部移动0x17字节(+前面的下一个骨骼名称长度0x4字节)(一个数据块大小为28(0x1C)字节)
+                    file.seek(0x17, 1)
                     # 读取结束标记
                     end_tag = file.read(1).hex()
                     # 将文件指针恢复到原来的位置
                     file.seek(current_position)
 
-                    log.debug("下文件名长度: %s 结束标记: %s", next_name_length, end_tag)
+                    log.debug(
+                        "下文件名长度: %s 结束标记: %s", next_name_length, end_tag
+                    )
 
                     # 检查是否到达骨骼名称部分的结尾
-                    if next_name_length <= 0 and end_tag == "3f":
+                    if next_name_length <= 0 or end_tag == "3f":
                         log.debug("读取骨骼信息结束: %s", len(bones))
                         break
 
+                log.debug("bones 长度: %s", len(bones))
+                if len(bones) <= 1:
+                    log.debug("没有骨骼信息")
+                    return {"CANCELLED"}
+
                 log.debug("读取骨骼变换数据")
-                log.debug("当前文件地址: %s", current_position)
+                log.debug("当前文件地址: %s", hex(current_position))
                 # 读取骨骼变换数据
-                bones_len = len(bones)
-                # 根据bones_len长度循环获取变换数据
-                for i in range(bones_len):
+                for bone in bones:
                     log.debug(
-                        "%s 读取 %s 骨骼变换数据 Level: %s",
-                        i + 1 ,bones[i][0],bones[i][1]
+                        "读取 %s 骨骼变换数据 Level: %s",
+                        bone[0],
+                        bone[1],
                     )
 
                     # 读取变换数据
@@ -110,6 +118,7 @@ class ImportSkelClass(bpy.types.Operator):
                 # 打印骨骼层级
                 utils.print_hierarchy(bones)
 
+            log.debug(f"骨骼数量: {len(bones)}, 变换数据数量: {len(transforms)}")
             # 创建骨架
             log.debug("创建骨架")
             # 创建骨架对象
@@ -120,7 +129,7 @@ class ImportSkelClass(bpy.types.Operator):
             armature.show_names = True
             # 显示轴
             armature.show_axes = True
-            # armature.display_type = 'STICK'
+            armature.display_type = "STICK"
 
             # 设置对象变换
             # armature_obj.scale = (scale, scale, scale)

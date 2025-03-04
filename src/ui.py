@@ -21,10 +21,10 @@ class ImportPanel(bpy.types.Panel):
             ("", "import.mesh_prop", "道具 / Prop"),
             ("", "import.mesh_map", "地图 / Map"),
             ("", "import.cm_mesh", "人物&武器 / Character&Weapon"),
-            ("导入动画", "", "POSE_HLT"),
-            ("", "import.anim", "动画 / Anim"),
             ("导入骨骼", "", "GROUP_BONE"),
             ("", "import.skel", "骨骼 / Skel"),
+            ("导入动画", "", "POSE_HLT"),
+            ("", "import.anim", "动画 / Anim"),
             ("骨骼目录", "", "GROUP_BONE"),
         ]
 
