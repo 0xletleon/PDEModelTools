@@ -8,6 +8,16 @@
 ## 参考
 - UV和法线参考了[MeGaMooNie](https://gamebanana.com/members/2429651)写的 [Noesis](https://richwhitehouse.com/index.php?content=inc_projects.php&showproject=91) 脚本 [(Final Combat mesh converter + assets.)](https://gamebanana.com/tools/18783)
 
+## 客户端
+包含国内和国外的客户端！
+- [FC历史客户端](https://www.123684.com/s/b5Y0Vv-rN4J3)
+
+## 问题
+由于UnPdeC的解压逻辑可能不正确，导致的部分文件导入到blender后会缺失部分部件的问题，
+暂时只能通过尝试导入其他版本中的文件来解决！
+也就是说其他客户端中的文件导入到blender中，可能没问题~
+或者拼接出完整的模型文件！
+
 ## 状态
 ### ANIM 动画
 - [x] 初步识别了动画数据
