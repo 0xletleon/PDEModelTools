@@ -171,7 +171,7 @@ class ImportAnimClass(bpy.types.Operator):
                     if file.tell() >= file_size:
                         log.debug("!正常退出 查找到尾部")
                         break
-                except Exception as e:
+                except (OSError, ValueError, RuntimeError) as e:
                     log.debug("!查找帧数据出错! %s", str(e))
                     break
 

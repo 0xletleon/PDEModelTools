@@ -56,7 +56,7 @@ def validate_file(file):
     try:
         header = file.read(12)
         return header == b"\xFF\xFF\xFF\xFF\x00\x00\x00\x00\x00\x00\x00\x00"
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         log.debug("文件验证失败: %s", e)
         return False
 

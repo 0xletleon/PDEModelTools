@@ -131,7 +131,7 @@ class ImportMeshPropClass(bpy.types.Operator):
 
             self.report({"INFO"}, "模型加载成功")
             return {"FINISHED"}
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             self.report({"ERROR"}, f"模型加载失败: {e}")
             traceback.print_exc()
             return {"CANCELLED"}

@@ -162,7 +162,7 @@ class ImportMeshMapClass(Operator, ImportHelper):
     def execute(self, context: bpy.types.Context) -> Set[str]:
         try:
             return self._execute_main(context)
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             log.error("操作失败: %s", e, exc_info=True)
             self.report({"ERROR"}, f"严重错误: {str(e)}")
             return {"CANCELLED"}

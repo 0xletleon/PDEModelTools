@@ -75,7 +75,7 @@ def read_skel_names(self, data):
 
         # 返回 物体开始位置，骨骼名称
         return data_index, skel_names
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         log.debug("! 读取骨骼信息失败: %s", e)
         self.report({"ERROR"}, "读取骨骼信息失败")
         traceback.print_exc()
@@ -170,7 +170,7 @@ def read_vertices(self, vertices_data, mesh_matrices_number, mesh_byte_size):
             else:
                 log.debug("! 顶点数据解析失败: 不足的字节数在偏移量 %s", mniv)
                 break
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         log.debug("! 顶点数据解析失败: %s", e)
         # self.report({"ERROR"}, f"顶点数据解析失败 : {e}")
         # traceback.print_exc()
@@ -195,7 +195,7 @@ def read_faces(self, faces_data_block, index_length):
             f2 = struct.unpack_from("H", faces_data_block, i + 0x8)[0]
             faces.append((f0, f1, f2))
             # log.debug("> 解析面: %s -> %s %s %s",f0,f1,f2)
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         log.debug("! 面数据解析失败: %s", e)
         # self.report({"ERROR"}, f"面数据解析失败 : {e}")
         traceback.print_exc()
@@ -336,7 +336,7 @@ def split_mesh(self, data):
         # data_start = next_mesh_start
 
         return mesh_obj
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         log.debug("! 分割网格数据失败: %s", e)
         traceback.print_exc()
         return mesh_obj
@@ -365,7 +365,7 @@ def read_colormap(self, data: bytes) -> ColorMapData:
             colormap.name = extract_name_from_path(path)
             log.debug("> colormap path: %s, name: %s", colormap.path, colormap.name)
 
-    except Exception as e:
+    except (OSError, ValueError, RuntimeError) as e:
         log.debug("! 解析颜色数据失败: %s", e)
         traceback.print_exc()
 
@@ -416,7 +416,7 @@ def find_next_head(data: bytes, data_start: int, block_size: int) -> Optional[in
                 return data_start
 
             data_start += 1
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             log.debug("! 查找下一个网格头部失败: %s", e)
             traceback.print_exc()
 

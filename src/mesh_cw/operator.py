@@ -134,7 +134,7 @@ class ImportMeshCWClass(bpy.types.Operator, ImportHelper):
                     new_obj.rotation_euler = (math.radians(90), 0, 0)
 
                 self.report({"INFO"}, "模型加载成功")
-            except Exception as e:
+            except (OSError, ValueError, RuntimeError) as e:
                 self.report({"ERROR"}, f"模型加载失败: {e}")
                 traceback.print_exc()
                 return {"CANCELLED"}

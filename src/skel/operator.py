@@ -160,6 +160,6 @@ class ImportSkelClass(bpy.types.Operator):
             log.debug("成功导入 %s 个骨骼", len(bones))
             return {"FINISHED"}
 
-        except Exception as e:
+        except (OSError, ValueError, RuntimeError) as e:
             log.debug("导入过程中发生错误: %s", str(e))
             return {"CANCELLED"}
