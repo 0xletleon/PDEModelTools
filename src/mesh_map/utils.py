@@ -55,7 +55,6 @@ class MeshData:
     uvs: List[Tuple[float, float]] = None
     normals: List[Tuple[float, float, float]] = None
     colormap: ColorMapData = None
-    has_done: bool = False
 
     def __post_init__(self):
         if self.vertices is None:
@@ -68,8 +67,6 @@ class MeshData:
             self.normals = []
         if self.colormap is None:
             self.colormap = ColorMapData()
-        if self.has_done:
-            self.has_done = False
 
 
 def safe_read(func):
@@ -78,7 +75,7 @@ def safe_read(func):
     def wrapper(*args, **kwargs):
         try:
             return func(*args, **kwargs)
-        except (OSError, ValueError, RuntimeError) as e:
+        except Exception as e:
             log.debug(f"! {func.__name__} 失败: {e}")
             traceback.print_exc()
             return None
@@ -213,7 +210,7 @@ class MeshReader:
 
             # return result
 
-        except (OSError, ValueError, RuntimeError) as e:
+        except Exception as e:
             log.debug(f"解析顶点 {i} 的 UV 数据失败: {e}")
             result["uvs"].append((0.0, 0.0))  # 默认 UV
             traceback.print_exc()
@@ -248,7 +245,7 @@ class MeshReader:
             log.debug("<<< 面数据读取完毕: %s 组", len(faces))
             return faces
 
-        except (OSError, ValueError, RuntimeError) as e:
+        except Exception as e:
             log.debug("! 面数据解析失败: %s", e)
             traceback.print_exc()
             return None
@@ -277,7 +274,7 @@ class MeshReader:
                 colormap.name = extract_name_from_path(path)
                 log.debug("> colormap path: %s, name: %s", colormap.path, colormap.name)
 
-        except (OSError, ValueError, RuntimeError) as e:
+        except Exception as e:
             log.debug("! 解析颜色数据失败: %s", e)
             traceback.print_exc()
 
@@ -302,7 +299,6 @@ class MeshProcessor:
             while True:
                 # 读取并处理单个网格
                 mesh_data = self.process_single_mesh()
-
                 if mesh_data is None:
                     break
 
@@ -314,13 +310,10 @@ class MeshProcessor:
                     log.debug("<<< 数据处理完成")
                     break
 
-                if mesh_data.has_done is True:
-                    break
-
             log.debug("👇 共处理 %d 个网格对象", len(self.reader.mesh_objects))
             return self.reader.mesh_objects
 
-        except (OSError, ValueError, RuntimeError) as e:
+        except Exception as e:
             log.debug("! 网格数据处理失败: %s", e)
             traceback.print_exc()
             return self.reader.mesh_objects
@@ -376,16 +369,10 @@ class MeshProcessor:
         )
 
         colormap = ColorMapData()
-        has_done = False
         if next_mesh_start is not None:
             colors_data = self.reader.data[next_data_start:next_mesh_start]
             colormap = self.reader.read_colormap(colors_data)
             self.reader.position = next_mesh_start
-        else:
-            log.debug("! 未找到下一个网格头部,尝试获取colormap！")
-            colors_data = self.reader.data[next_data_start : len(self.reader.data)]
-            colormap = self.reader.read_colormap(colors_data)
-            has_done = True
 
         # 5. 构建网格数据
         return MeshData(
@@ -399,7 +386,6 @@ class MeshProcessor:
             uvs=vertices_info["uvs"],
             normals=vertices_info["normals"],
             colormap=colormap,
-            has_done=has_done,
         )
 
 
@@ -438,7 +424,7 @@ def find_next_head(data: bytes, data_start: int, block_size: int) -> Optional[in
                 return data_start
 
             data_start += 1
-        except (OSError, ValueError, RuntimeError) as e:
+        except Exception as e:
             log.debug("! 查找下一个网格头部失败: %s", e)
             traceback.print_exc()
 
@@ -462,7 +448,7 @@ class MeshFile:
             processor = MeshProcessor(reader)
             return processor.process_all()
 
-        except (OSError, ValueError, RuntimeError) as e:
+        except Exception as e:
             log.debug("! 文件读取失败: %s", e)
             traceback.print_exc()
             return []

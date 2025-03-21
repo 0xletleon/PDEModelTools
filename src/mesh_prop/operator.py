@@ -5,6 +5,8 @@ import traceback
 from typing import Set
 
 import bpy
+from bpy_extras.io_utils import ImportHelper
+from bpy.props import StringProperty
 
 from . import utils
 from ..log import log
@@ -17,48 +19,31 @@ BSDF_NODE_NAME = "Principled BSDF"
 
 
 # 定义操作类
-class ImportMeshPropClass(bpy.types.Operator):
+class ImportMeshPropClass(bpy.types.Operator, ImportHelper):
     """Import a .mesh file"""
 
     bl_idname = "import.mesh_prop"
     bl_label = "导入道具.mesh"
     bl_options = {"REGISTER", "UNDO"}
-    # 使用bpy.props定义文件路径属性
-    filepath: bpy.props.StringProperty(subtype="FILE_PATH", default="")  # type: ignore
-    # 文件扩展名过滤
+    
     filename_ext = ".mesh"
-    filter_glob: bpy.props.StringProperty(default="*.mesh", options={"HIDDEN"})  # type: ignore
+    filter_glob: StringProperty(default="*.mesh", options={"HIDDEN"})  # type: ignore
 
-    def __init__(self):
-        self.context = bpy.types.Context
-        self._processed_materials: Set[str] = set()
-
-    # 定义invoke方法来显示文件选择对话框
-    def invoke(self, context, event):
-        # 调用文件选择对话框
-        context.window_manager.fileselect_add(self)
-        return {"RUNNING_MODAL"}
+    _processed_materials: Set[str] = set()
 
     def execute(self, context):
-        # 清除当前场景中的所有物体
-        # bpy.ops.object.select_all(action="SELECT")
-        # bpy.ops.object.delete()
-
         try:
-            # 定义数据文件的路径
-            file_path = self.filepath
-            # 检查文件是否存在
-            if not os.path.exists(file_path):
+            # 检查文件路径
+            if not os.path.exists(self.filepath):
                 self.report({"ERROR"}, "文件不存在，请检查路径是否正确")
                 return {"CANCELLED"}
 
             # 读取二进制文件
-            # data = None
-            with open(file_path, "rb") as file:
+            with open(self.filepath, "rb") as file:
                 data = file.read()
 
-            # 获得文件名(不带后缀)
-            mesh_name = os.path.splitext(os.path.basename(file_path))[0]
+            # 获取基础名称
+            mesh_name = os.path.splitext(os.path.basename(self.filepath))[0]
 
             # 分割网格数据
             mesh_obj = utils.split_mesh(self, data)
@@ -131,7 +116,7 @@ class ImportMeshPropClass(bpy.types.Operator):
 
             self.report({"INFO"}, "模型加载成功")
             return {"FINISHED"}
-        except (OSError, ValueError, RuntimeError) as e:
+        except Exception as e:
             self.report({"ERROR"}, f"模型加载失败: {e}")
             traceback.print_exc()
             return {"CANCELLED"}

@@ -22,50 +22,50 @@ class ColorMapData:
     name: str = ""
 
 
-def read_skel_names(self, data):
-    """读取包含的骨骼名称"""
-    log.debug(">>> 开始读取包含的骨骼名称")
+def read_dynamic_head(self, data):
+    """读取头部信息"""
+    log.debug(">>> 开始读取头部信息")
 
     try:
-        # 骨骼名称
-        skel_names = []
+        # 网格信息
+        mesh_info = []
         # 文件读取位置
         data_index = 0
-        # 读取包含骨骼名称数量
-        obj_count = struct.unpack_from("<I", data, data_index)[0]
+        # 读取包含的对象数量1
+        include_obj_number1 = struct.unpack_from("<I", data, data_index)[0]
         # 修正数据读取位置
         data_index += 0x4
 
-        # 读取包含的骨骼名称
-        for _ in range(obj_count):
-            # 读取骨骼名称长度
+        # 读取包含的对象名称
+        for _ in range(include_obj_number1):
+            # 读取物体名称长度
             name_length = struct.unpack_from("<I", data, data_index)[0]
             # 修正数据读取位置
             data_index += 0x4
-            # 读取骨骼名称
-            skel_name = struct.unpack_from(f"<{name_length}s", data, data_index)[
+            # 读取物体名称
+            obj_name = struct.unpack_from(f"<{name_length}s", data, data_index)[
                 0
             ].decode("utf-8")
-            log.debug("骨骼名称: %s", skel_name)
+            log.debug("对象名称: %s", obj_name)
             # 保存名称
-            skel_names.append(skel_name)
+            mesh_info.append(obj_name)
             # 修正数据读取位置
             data_index += name_length
 
-        # 读取包含骨骼数量2
-        obj_count2 = struct.unpack_from("<I", data, data_index)[0]
+        # 读取包含的对象数量2
+        include_obj_number2 = struct.unpack_from("<I", data, data_index)[0]
         # 修正数据读取位置
         data_index += 0x4
 
         # 检查头部数量是否一致
-        if obj_count != obj_count2:
-            log.debug("! 骨骼名称解析失败: 包含的数量不一致")
-            self.report({"ERROR"}, "骨骼名称解析失败")
+        if include_obj_number1 != include_obj_number2:
+            log.debug("! 头部信息解析失败: 包含的对象数量不一致")
+            self.report({"ERROR"}, "头部信息解析失败")
             traceback.print_exc()
             return {"CANCELLED"}
 
         # 跳过物体的 MinPos MaxPos
-        skip_len = obj_count * 0x18
+        skip_len = include_obj_number1 * 0x18
         log.debug("data_index: %s", hex(data_index))
 
         # 修正数据读取位置
@@ -73,11 +73,11 @@ def read_skel_names(self, data):
 
         log.debug("data_index: %s skip_len: %s", hex(data_index), hex(skip_len))
 
-        # 返回 物体开始位置，骨骼名称
-        return data_index, skel_names
-    except (OSError, ValueError, RuntimeError) as e:
-        log.debug("! 读取骨骼信息失败: %s", e)
-        self.report({"ERROR"}, "读取骨骼信息失败")
+        # 返回 物体开始位置，物体信息
+        return data_index, mesh_info
+    except Exception as e:
+        log.debug("! 读取头部信息失败: %s", e)
+        self.report({"ERROR"}, "读取头部信息失败")
         traceback.print_exc()
         return {"CANCELLED"}
 
@@ -170,7 +170,7 @@ def read_vertices(self, vertices_data, mesh_matrices_number, mesh_byte_size):
             else:
                 log.debug("! 顶点数据解析失败: 不足的字节数在偏移量 %s", mniv)
                 break
-    except (OSError, ValueError, RuntimeError) as e:
+    except Exception as e:
         log.debug("! 顶点数据解析失败: %s", e)
         # self.report({"ERROR"}, f"顶点数据解析失败 : {e}")
         # traceback.print_exc()
@@ -195,7 +195,7 @@ def read_faces(self, faces_data_block, index_length):
             f2 = struct.unpack_from("H", faces_data_block, i + 0x8)[0]
             faces.append((f0, f1, f2))
             # log.debug("> 解析面: %s -> %s %s %s",f0,f1,f2)
-    except (OSError, ValueError, RuntimeError) as e:
+    except Exception as e:
         log.debug("! 面数据解析失败: %s", e)
         # self.report({"ERROR"}, f"面数据解析失败 : {e}")
         traceback.print_exc()
@@ -214,129 +214,136 @@ def split_mesh(self, data):
 
     # 数据起始位置
     data_start = 0
+    # 是否为首次读取
+    # first_read = True
     # 网格对象
     mesh_obj = []
 
-    # 读取包含的骨骼名称
-    data_index, skel_names = read_skel_names(self, data)
+    # 读取动态头部
+    data_index, mesh_info = read_dynamic_head(self, data)
     # 修正数据起始位置
     data_start = data_index
     log.debug("> fix数据起始位置: %s", hex(data_start))
 
     try:
-        log.debug(">>> @@@ 读取网格信息")
+        for mi_name in mesh_info:
+            log.debug(">>> 读取网格信息名称: %s", mi_name)
 
-        # 读取头部信息
-        read_head_temp = read_head(data, data_start)
+            # 读取头部信息
+            read_head_temp = read_head(data, data_start)
 
-        if read_head_temp is None:
-            log.debug("! 读取头部信息失败")
-            return []
+            if read_head_temp is None:
+                log.debug("! 读取头部信息失败")
+                # return mesh_obj
+                break
 
-        # 返回文件中包含网格物体数量, 本物体面数据组数量, 本网格变换矩阵数量, 本网格字节总数
-        (
-            mesh_obj_number,
-            mesh_face_group_number,
-            mesh_matrices_number,
-            mesh_byte_size,
-        ) = read_head_temp
+            # 返回文件中包含网格物体数量, 本物体面数据组数量, 本网格变换矩阵数量, 本网格字节总数
+            (
+                mesh_obj_number,
+                mesh_face_group_number,
+                mesh_matrices_number,
+                mesh_byte_size,
+            ) = read_head_temp
 
-        # 获取顶点数据长度
-        vertices_data = data[data_start + 0x1D : data_start + 0x1D + mesh_byte_size]
-        log.debug("> 获取顶点数据长度: %s", hex(len(vertices_data)))
-        if len(vertices_data) <= 0:
-            log.debug("! 获取顶点数据长度失败")
-            return []
+            # 获取顶点数据长度
+            vertices_data = data[data_start + 0x1D : data_start + 0x1D + mesh_byte_size]
+            log.debug("> 获取顶点数据长度: %s", hex(len(vertices_data)))
+            if len(vertices_data) <= 0:
+                log.debug("! 获取顶点数据长度失败")
+                break
 
-        # 解析顶点数据块
-        read_vertices_temp = read_vertices(
-            self, vertices_data, mesh_matrices_number, mesh_byte_size
-        )
-        # 判断是否读取失败
-        if read_vertices_temp is None:
-            log.debug("! 解析顶点数据失败")
-            return []
+            # 解析顶点数据块
+            read_vertices_temp = read_vertices(
+                self, vertices_data, mesh_matrices_number, mesh_byte_size
+            )
+            # 判断是否读取失败
+            if read_vertices_temp is None:
+                log.debug("! 解析顶点数据失败")
+                # return mesh_obj
+                break
+            # 顶点数据, UV坐标数据, 切线数据
+            vertices_array, normals, uvs, block_size = read_vertices_temp
 
-        # 顶点数据, UV坐标数据, 切线数据
-        vertices_array, normals, uvs, block_size = read_vertices_temp
-
-        # 获取面数据块大小
-        faces_data_size = struct.unpack(
-            "<I",
-            data[
+            # 获取面数据块大小
+            faces_data_size = struct.unpack(
+                "<I",
+                data[
+                    data_start
+                    + 0x1D
+                    + mesh_byte_size : data_start
+                    + 0x1D
+                    + mesh_byte_size
+                    + 0x4
+                ],
+            )[0]
+            log.debug("> 获取面数据块大小: %s", hex(faces_data_size))
+            # 获取面数据块
+            faces_data_block = data[
                 data_start
                 + 0x1D
-                + mesh_byte_size : data_start
+                + mesh_byte_size
+                + 0x4 : data_start
                 + 0x1D
                 + mesh_byte_size
                 + 0x4
-            ],
-        )[0]
-        log.debug("> 获取面数据块大小: %s", hex(faces_data_size))
-        # 获取面数据块
-        faces_data_block = data[
-            data_start
-            + 0x1D
-            + mesh_byte_size
-            + 0x4 : data_start
-            + 0x1D
-            + mesh_byte_size
-            + 0x4
-            + faces_data_size
-        ]
-        log.debug("> 索引地址: %s", hex(data_start + 0x1D + mesh_byte_size + 0x4))
-        log.debug("> 获取面数据块: %s", hex(len(faces_data_block)))
-        # 解析面数据块
-        faces_array = read_faces(self, faces_data_block, len(faces_data_block))
-        # 判断是否读取失败
-        if faces_array is None:
-            log.debug("! 解析面数据失败")
-            return []
+                + faces_data_size
+            ]
+            log.debug("> 索引地址: %s", hex(data_start + 0x1D + mesh_byte_size + 0x4))
+            log.debug("> 获取面数据块: %s", hex(len(faces_data_block)))
+            # 解析面数据块
+            faces_array = read_faces(self, faces_data_block, len(faces_data_block))
+            # 判断是否读取失败
+            if faces_array is None:
+                log.debug("! 解析面数据失败")
+                # return mesh_obj
+                break
 
-        # 结束位置,也是新的开始
-        data_start = data_start + 0x1D + mesh_byte_size + 0x4 + faces_data_size
-        log.debug("> data_start: %s", hex(data_start))
+            # 结束位置,也是新的开始
+            data_start = data_start + 0x1D + mesh_byte_size + 0x4 + faces_data_size
+            log.debug("> data_start: %s", hex(data_start))
 
-        # 查找ColorMap
-        colors_data = data[data_start : len(data)]
-        readed_colormap = read_colormap(self, colors_data)
-        log.debug("> colormap: %s", readed_colormap)
+            # 查找ColorMap
+            colors_data = data[data_start : len(data)]
+            readed_colormap = read_colormap(self, colors_data)
+            log.debug("> colormap: %s", readed_colormap)
 
-        # 向mesh_obj中添加数据
-        mesh_obj.append(
-            {
-                # "name": str(obj_name),
-                "vertices": {
-                    "mesh_obj_number": mesh_obj_number,
-                    "mesh_matrices_number": mesh_matrices_number,
-                    "mesh_byte_size": mesh_byte_size,
-                    "data": vertices_array,
-                },
-                "faces": {"size": faces_data_size, "data": faces_array},
-                "normals": normals,
-                "uvs": uvs,
-                "colormap": readed_colormap,
-                "skel_names": skel_names,
-            }
-        )
+            # 向mesh_obj中添加数据
+            mesh_obj.append(
+                {
+                    "name": str(mi_name),
+                    "vertices": {
+                        "mesh_obj_number": mesh_obj_number,
+                        "mesh_matrices_number": mesh_matrices_number,
+                        "mesh_byte_size": mesh_byte_size,
+                        "data": vertices_array,
+                    },
+                    "faces": {"size": faces_data_size, "data": faces_array},
+                    "normals": normals,
+                    "uvs": uvs,
+                    "colormap": readed_colormap,
+                }
+            )
 
-        # # 检查是否到达文件末尾
-        # log.debug(
-        #     "len(mesh_obj): %s ,mesh_obj_number: %s", len(mesh_obj), mesh_obj_number
-        # )
+            # 检查是否到达文件末尾
+            log.debug(
+                "len(mesh_obj): %s ,mesh_obj_number: %s", len(mesh_obj), mesh_obj_number
+            )
+            # if len(mesh_obj) >= mesh_obj_number:
+            #     log.debug("<<< 数据到达尾部")
+            #     break
 
-        # # 查找下一个头部
-        # next_mesh_start = find_next_head(data, data_start, block_size)
+            # 查找下一个头部
+            next_mesh_start = find_next_head(data, data_start, block_size)
 
-        # if next_mesh_start is None:
-        #     log.debug("<<< 没有找到下一个头部")
-        #     return mesh_obj
-        # log.debug("<<< 下一个头部: %s", hex(next_mesh_start))
-        # # 修正位置
-        # data_start = next_mesh_start
+            if next_mesh_start is None:
+                log.debug("<<< 没有找到下一个头部")
+                return mesh_obj
+            log.debug("<<< 下一个头部: %s", hex(next_mesh_start))
+            # 修正位置
+            data_start = next_mesh_start
 
         return mesh_obj
-    except (OSError, ValueError, RuntimeError) as e:
+    except Exception as e:
         log.debug("! 分割网格数据失败: %s", e)
         traceback.print_exc()
         return mesh_obj
@@ -365,7 +372,7 @@ def read_colormap(self, data: bytes) -> ColorMapData:
             colormap.name = extract_name_from_path(path)
             log.debug("> colormap path: %s, name: %s", colormap.path, colormap.name)
 
-    except (OSError, ValueError, RuntimeError) as e:
+    except Exception as e:
         log.debug("! 解析颜色数据失败: %s", e)
         traceback.print_exc()
 
@@ -416,7 +423,7 @@ def find_next_head(data: bytes, data_start: int, block_size: int) -> Optional[in
                 return data_start
 
             data_start += 1
-        except (OSError, ValueError, RuntimeError) as e:
+        except Exception as e:
             log.debug("! 查找下一个网格头部失败: %s", e)
             traceback.print_exc()
 
